@@ -1,0 +1,25 @@
+# Secrets and Credentials
+.env
+*.env
+
+# Python Environment and Caching
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Local Development / IDE Settings
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Operating System Files
+.DS_Store
+Thumbs.db
