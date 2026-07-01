@@ -295,7 +295,7 @@ def tavily_stock_search(query: str) -> dict:
     from tavily import TavilyClient
     try:
         # Remember to insert your actual Tavily API Key
-        tavily_client = TavilyClient(api_key="YOUR_TAVILY_API_KEY")
+        tavily_client = TavilyClient(api_key=os.getenv("YOUR_TAVILY_API_KEY"))
 
         # We pass the time_range="week" parameter to restrict it to the last 7 days
         response = tavily_client.search(
