@@ -1,4 +1,4 @@
-name: Automated Daily Execution Agent
+name: ZOX Automated Daily Execution Agent
 
 on:
   schedule:
