@@ -91,7 +91,7 @@ mail.select("inbox")
 date_today = date.today()
 today_str = date_today.strftime("%d-%b-%Y")
 
-search_criterion = f"SINCE {today_str} TEXT 'shareholders' TEXT 'dividend'"
+search_criterion = f'(UNSEEN SINCE {today_str} TEXT "shareholders" TEXT "dividend")'
 
 status, data = mail.search(None, search_criterion)
 
