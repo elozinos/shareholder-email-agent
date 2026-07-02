@@ -15,7 +15,9 @@ from langchain.tools import tool
 from dotenv import load_dotenv
 import os
 
+# Load your local keys/environment profiles from the .env file
 load_dotenv()
+
 # Setup email credentials and configurations
 SMTP_SERVER = "smtp.gmail.com"
 SMTP_PORT = 587
@@ -80,33 +82,6 @@ def safe_llm_call(messages: list, response_schema=None):
             continue
 
     raise RuntimeError("All configured fallback models in the priority list failed to execute.")
-
-
-# connecting to my mail by instantiating a connection
-mail = imaplib.IMAP4_SSL("imap.gmail.com")
-mail.login(SENDER_EMAIL, SENDER_PASSWORD)
-mail.select("inbox")
-
-# collect only email for today
-date_today = date.today()
-today_str = date_today.strftime("%d-%b-%Y")
-
-search_criterion = f'(UNSEEN SINCE {today_str} TEXT "shareholders" TEXT "dividend")'
-
-status, data = mail.search(None, search_criterion)
-
-emails_to_analyse = []
-
-if data[0] == b'':
-    print("No email today")
-else:
-    email_ids = data[0].split()
-    # to get the emails to analyse using the FETCH method we will initialise an empty list
-    for e_id in email_ids:
-        status, msg_data = mail.fetch(e_id, "(RFC822)")
-        raw_email = msg_data[0][1]
-        msg = email.message_from_bytes(raw_email)
-        emails_to_analyse.append(msg)
 
 
 # Define the structure you want back
@@ -180,74 +155,6 @@ def create_brief(text: str):
     except Exception as e:
         send_error_alert(str(e), "Agent 1: Briefing Generation Task")
         return "Error creating briefing summary due to total model infrastructure failures."
-
-
-# --- Main Execution Workflow Orchestration ---
-
-if emails_to_analyse:
-    for m in emails_to_analyse:
-        html_body = ""
-        plain_body = ""
-
-        # Corrected structure to cleanly grab the content types
-        if m.is_multipart():
-            for part in m.walk():
-                content_type = part.get_content_type()
-                if content_type == "text/html":
-                    html_body = part.get_payload(decode=True).decode(errors="ignore")
-                elif content_type == "text/plain":
-                    plain_body = part.get_payload(decode=True).decode(errors="ignore")
-        else:
-            if m.get_content_type() == "text/html":
-                html_body = m.get_payload(decode=True).decode(errors="ignore")
-            else:
-                plain_body = m.get_payload(decode=True).decode(errors="ignore")
-
-        # Determine the target content to look for URLs in
-        target_content = html_body if html_body else plain_body
-
-        if not target_content:
-            print("Skipping email: No readable body found.")
-            continue
-
-        # Extract the relevant document links using Gemini
-        links = extract_links_with_gemini(target_content)
-
-        if not links:
-            print("No relevant shareholder PDF document links found in this email.")
-            continue
-
-        # Accumulate text from all extracted PDF links
-        combined_pdf_text = ""
-        for url in links:
-            print(f"Downloading and reading: {url}")
-            pdf_text = download_and_read_pdf(url)
-            combined_pdf_text += f"\n--- Document from {url} ---\n" + pdf_text
-
-        # Generate the final briefing from the accumulated text
-        print("Generating financial briefing summary...")
-        final_briefing = create_brief(combined_pdf_text)
-
-        # sending the brief via email
-        msg = EmailMessage()
-        msg["Subject"] = "Stock briefing from a meeting from your personal email assistant"
-        msg["From"] = SENDER_EMAIL
-        msg["To"] = RECEIVER_EMAIL
-        msg.set_content(final_briefing)  # Assign the briefing text to the email body
-
-        try:
-            with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as server:
-                server.starttls()  # Upgrade the connection to secure encrypted TLS
-                server.login(SENDER_EMAIL, SENDER_PASSWORD)
-                server.send_message(msg)
-            print("Email sent successfully!")
-        except Exception as e:
-            send_error_alert(str(e), "Agent 1: Dispatch Final Summary Email")
-            print(f"Failed to send email. Error: {e}")
-
-# Close the IMAP mailbox connection cleanly
-mail.close()
-mail.logout()
 
 
 # -------------- agent 2 for the stock meeting
@@ -348,9 +255,110 @@ def run_weekly_stock_news_agent():
         print(f"Agent 2 failed to compile summary: {e}")
 
 
-# --- Weekday Conditional Trigger ---
-# 5 is Saturday, 6 is Sunday
-if date.today().weekday() >= 5:
-    run_weekly_stock_news_agent()
-else:
-    print("Skipping Agent 2: Stock news updates run exclusively on weekends.")
+# --- Consolidated Execution Wrapper for Scheduled Cloud Tasks ---
+def execute_autopilot_pipeline():
+    print("Autopilot waking up to process emails...")
+
+    # connecting to my mail by instantiating a connection
+    mail = imaplib.IMAP4_SSL("imap.gmail.com")
+    mail.login(SENDER_EMAIL, SENDER_PASSWORD)
+    mail.select("inbox")
+
+    # collect only email for today
+    date_today = date.today()
+    today_str = date_today.strftime("%d-%b-%Y")
+
+    search_criterion = f"SINCE {today_str} TEXT 'shareholders' TEXT 'dividend'"
+
+    status, data = mail.search(None, search_criterion)
+
+    emails_to_analyse = []
+
+    if data[0] == b'':
+        print("No email today")
+    else:
+        email_ids = data[0].split()
+        # to get the emails to analyse using the FETCH method we will initialise an empty list
+        for e_id in email_ids:
+            status, msg_data = mail.fetch(e_id, "(RFC822)")
+            raw_email = msg_data[0][1]
+            msg = email.message_from_bytes(raw_email)
+            emails_to_analyse.append(msg)
+
+    if emails_to_analyse:
+        for m in emails_to_analyse:
+            html_body = ""
+            plain_body = ""
+
+            # Corrected structure to cleanly grab the content types
+            if m.is_multipart():
+                for part in m.walk():
+                    content_type = part.get_content_type()
+                    if content_type == "text/html":
+                        html_body = part.get_payload(decode=True).decode(errors="ignore")
+                    elif content_type == "text/plain":
+                        plain_body = part.get_payload(decode=True).decode(errors="ignore")
+            else:
+                if m.get_content_type() == "text/html":
+                    html_body = m.get_payload(decode=True).decode(errors="ignore")
+                else:
+                    plain_body = m.get_payload(decode=True).decode(errors="ignore")
+
+            # Determine the target content to look for URLs in
+            target_content = html_body if html_body else plain_body
+
+            if not target_content:
+                print("Skipping email: No readable body found.")
+                continue
+
+            # Extract the relevant document links using Gemini
+            links = extract_links_with_gemini(target_content)
+
+            if not links:
+                print("No relevant shareholder PDF document links found in this email.")
+                continue
+
+            # Accumulate text from all extracted PDF links
+            combined_pdf_text = ""
+            for url in links:
+                print(f"Downloading and reading: {url}")
+                pdf_text = download_and_read_pdf(url)
+                combined_pdf_text += f"\n--- Document from {url} ---\n" + pdf_text
+
+            # Generate the final briefing from the accumulated text
+            print("Generating financial briefing summary...")
+            final_briefing = create_brief(combined_pdf_text)
+
+            # sending the brief via email
+            msg = EmailMessage()
+            msg["Subject"] = "Stock briefing from a meeting from your personal email assistant"
+            msg["From"] = SENDER_EMAIL
+            msg["To"] = RECEIVER_EMAIL
+            msg.set_content(final_briefing)  # Assign the briefing text to the email body
+
+            try:
+                with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as server:
+                    server.starttls()  # Upgrade the connection to secure encrypted TLS
+                    server.login(SENDER_EMAIL, SENDER_PASSWORD)
+                    server.send_message(msg)
+                print("Email sent successfully!")
+            except Exception as e:
+                send_error_alert(str(e), "Agent 1: Dispatch Final Summary Email")
+                print(f"Failed to send email. Error: {e}")
+
+    # Close the IMAP mailbox connection cleanly
+    mail.close()
+    mail.logout()
+
+    # --- Weekday Conditional Trigger ---
+    # 5 is Saturday, 6 is Sunday
+    if date.today().weekday() >= 5:
+        run_weekly_stock_news_agent()
+    else:
+        print("Skipping Agent 2: Stock news updates run exclusively on weekends.")
+
+    print("Email processing window complete.")
+
+
+if __name__ == "__main__":
+    execute_autopilot_pipeline()
