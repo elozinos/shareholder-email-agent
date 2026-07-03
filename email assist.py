@@ -1,3 +1,6 @@
+import os
+import time
+from http.server import BaseHTTPRequestHandler, HTTPServer
 import imaplib
 import email
 from langchain_core.prompts import ChatPromptTemplate
@@ -13,9 +16,8 @@ import io
 import smtplib
 from langchain.tools import tool
 from dotenv import load_dotenv
-import os
 
-# Load your local keys/environment profiles from the .env file
+# Load environment variables locally or from cloud environment settings
 load_dotenv()
 
 # Setup email credentials and configurations
@@ -141,7 +143,6 @@ def download_and_read_pdf(url: str) -> str:
         return f"Error downloading PDF: {str(e)}"
 
 
-# creating briefing
 def create_brief(text: str):
     """this function is to create a briefing from the text"""
     system_Prompt = "You are a smart financial assistant in terms of stocks. Write in clean paragraphs with simple line breaks. Do not use Markdown asterisks or bold text headers."
@@ -169,7 +170,6 @@ def TavilyStockSearch():
     return response
 
 
-# send stock news to my email
 @tool
 def Stock_news_mail(new: str) -> str:
     """Sends compiled financial and stock market news updates via email."""
@@ -195,13 +195,11 @@ def Stock_news_mail(new: str) -> str:
         print(f"Failed to send email. Error: {e}")
 
 
-# Optimize your search tool to dynamically accept queries and use parameters
 @tool
 def tavily_stock_search(query: str) -> dict:
     """Searches the web for latest financial news using Tavily."""
     from tavily import TavilyClient
     try:
-        # Remember to insert your actual Tavily API Key
         tavily_client = TavilyClient(api_key=os.getenv("YOUR_TAVILY_API_KEY"))
 
         # We pass the time_range="week" parameter to restrict it to the last 7 days
@@ -217,7 +215,6 @@ def tavily_stock_search(query: str) -> dict:
         return {}
 
 
-# Main function to run the Agent 2 pipeline
 def run_weekly_stock_news_agent():
     print("Running Agent 2: Fetching weekly stock market news...")
 
@@ -255,10 +252,10 @@ def run_weekly_stock_news_agent():
         print(f"Agent 2 failed to compile summary: {e}")
 
 
-# --- Consolidated Execution Wrapper for Scheduled Cloud Tasks ---
-def execute_autopilot_pipeline():
+# --- Consolidated Pipeline Execution Logic ---
+def run_my_email_agent():
     print("Autopilot waking up to process emails...")
-
+    
     # connecting to my mail by instantiating a connection
     mail = imaplib.IMAP4_SSL("imap.gmail.com")
     mail.login(SENDER_EMAIL, SENDER_PASSWORD)
@@ -356,8 +353,34 @@ def execute_autopilot_pipeline():
         run_weekly_stock_news_agent()
     else:
         print("Skipping Agent 2: Stock news updates run exclusively on weekends.")
+        
+    print("Email processing window complete. Going back to standby loop...")
 
-    print("Email processing window complete.")
+
+# A tiny background web server to keep Render's free tier happy
+class SimpleWebServer(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.send_header("Content-type", "text/html")
+        self.end_headers()
+        self.wfile.write(b"Zox Agent Status: Active and Running.")
+
+
+def run_continuous_service():
+    # Start the web server on port 10000 (Render's default free port)
+    port = int(os.environ.get("PORT", 10000))
+    server = HTTPServer(("0.0.0.0", port), SimpleWebServer)
+    print(f"Web server started on port {port}")
+    
+    # This loop keeps your code running forever for free
+    while True:
+        run_my_email_agent()
+        
+        # Handle incoming web pings for 4 hours before processing emails again
+        # 14400 seconds = 4 hours
+        timeout = time.time() + 14400
+        while time.time() < timeout:
+            server.handle_request()
 
 
 if __name__ == "__main__":
