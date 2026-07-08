@@ -384,4 +384,4 @@ def run_continuous_service():
 
 
 if __name__ == "__main__":
-    run_continuous_service()
+    execute_autopilot_pipeline()
