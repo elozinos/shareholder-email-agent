@@ -16,7 +16,7 @@ import io
 import smtplib
 from langchain.tools import tool
 from dotenv import load_dotenv
-
+import threading
 # Load environment variables locally or from cloud environment settings
 load_dotenv()
 
@@ -366,21 +366,25 @@ class SimpleWebServer(BaseHTTPRequestHandler):
         self.wfile.write(b"Zox Agent Status: Active and Running.")
 
 
-def run_continuous_service():
-    # Start the web server on port 10000 (Render's default free port)
+def start_http_server():
     port = int(os.environ.get("PORT", 10000))
     server = HTTPServer(("0.0.0.0", port), SimpleWebServer)
-    print(f"Web server started on port {port}")
-    
-    # This loop keeps your code running forever for free
+    print(f"Web server listening on port {port}")
+    server.serve_forever()
+
+
+def run_continuous_service():
+    # Start the HTTP server on a separate thread so port 10000 is ALWAYS open
+    server_thread = threading.Thread(target=start_http_server, daemon=True)
+    server_thread.start()
+
+    # Main continuous loop for email processing
     while True:
         run_my_email_agent()
         
-        # Handle incoming web pings for 4 hours before processing emails again
-        # 14400 seconds = 4 hours
-        timeout = time.time() + 14400
-        while time.time() < timeout:
-            server.handle_request()
+        # Sleep for 4 hours (14400 seconds) until the next check
+        print("Sleeping for 4 hours until next email processing run...")
+        time.sleep(14400)
 
 
 if __name__ == "__main__":
